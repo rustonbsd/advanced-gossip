@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils::time_now;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct PolicyTopic {
     read_policy: ReadPolicy,
     write_policy: WritePolicy,
@@ -27,13 +27,13 @@ impl PolicyTopic {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ReadPolicy {
     All,    
     Custom(Vec<VerifyingKey>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum WritePolicy {
     All,
     Owner(VerifyingKey),
