@@ -51,14 +51,26 @@ pub struct Message {
 
 impl Message {
     pub fn from_bytes(raw_data: Vec<u8>,secret_key: Option<&SigningKey>) -> anyhow::Result<Self> {
-        let signature = Signature::from_bytes(&raw_data[0..SIGNATURE_LENGTH].try_into()?);
-        let timestamp = u64::from_le_bytes(raw_data[64..72].try_into()?);
-        let author = VerifyingKey::from_bytes(raw_data[72..104].try_into()?)?;
-        
-        let policy_buf_len = u64::from_le_bytes(raw_data[104..112].try_into()?);
-        let read_policy = serde_json::from_slice::<ReadPolicy>(&raw_data[112..(112+policy_buf_len as usize)])?;
+        let (signature_buf,raw_data) = raw_data.split_at(SIGNATURE_LENGTH);
+        let signature = Signature::from_bytes(&signature_buf.try_into()?);
 
-        let raw_data = raw_data[(112+policy_buf_len as usize)..].to_vec();
+        let (timestamp_buf, raw_data) = raw_data.split_at(8);
+        let timestamp = u64::from_le_bytes(timestamp_buf.try_into()?);
+
+        let (author_buf,raw_data) = raw_data.split_at(32);
+        let author = VerifyingKey::from_bytes(author_buf.try_into()?)?;
+        
+        let (policy_buf_len_buf,raw_data) = raw_data.split_at(8);
+        let policy_buf_len = u64::from_le_bytes(policy_buf_len_buf.try_into()?);
+
+        if policy_buf_len > raw_data.len() as u64 {
+            bail!("policy buffer too long")
+        }
+
+        let (read_policy_buf, raw_data) = raw_data.split_at(policy_buf_len as usize);
+        let read_policy = serde_json::from_slice::<ReadPolicy>(&read_policy_buf)?;
+
+        let raw_data = raw_data.to_vec();
         let data = match read_policy.clone() {
             ReadPolicy::All => Some(raw_data.clone()),
             ReadPolicy::Custom(node_ids) => match secret_key {
@@ -68,32 +80,49 @@ impl Message {
 
                     let (data_enc_len_buf, raw_data) = raw_data.split_at(8);
                     let data_enc_len = u64::from_le_bytes(data_enc_len_buf.try_into().unwrap()) as usize;
+                    if data_enc_len > raw_data.len() {
+                        bail!("data buffer too long")
+                    }
 
                     let (data_enc, keys_enc) = raw_data.split_at(data_enc_len);
 
-                    let my_index = if author.eq(&my_public_key) { 
-                        Some(0)
-                    } else if node_ids.contains(&my_public_key) {
-                        match node_ids.iter().position(|&n| n.eq(&my_public_key)){
-                            Some(index) => Some(index+1),
-                            None => None,
-                        }
-                    } else {None};
-                    println!("my_index: {:?}", my_index);
+                    let my_index = match author {
+                        author if author.eq(&my_public_key) => Some(0),
+                        _author if node_ids.contains(&my_public_key) => {
+                            match node_ids.iter().position(|&n| n.eq(&my_public_key)){
+                                Some(index) => Some(index+1),
+                                None => None,
+                            }
+                        },
+                       _author => None,
+                    };
 
                     if let Some(index) = my_index  {
                         if index < node_ids.len()+1 {
-                            let mut offset = 0u64;
+                            let mut last_keys_enc = keys_enc;
                             for _ in 0..index {
-                                let len_buf = keys_enc[offset as usize..(offset as usize+8)].to_vec();
-                                offset += u64::from_le_bytes(len_buf.try_into().unwrap()) + 8;
+                                let keys_enc = last_keys_enc;
+                                let (key_len_buf,keys_enc) = keys_enc.split_at(8);
+                                let key_len = u64::from_le_bytes(key_len_buf.try_into().unwrap());
+                                if key_len > keys_enc.len() as u64 {
+                                    bail!("key buffer too long")
+                                }
+                                let (_key, keys_enc) = keys_enc.split_at(key_len as usize);
+                                last_keys_enc = keys_enc;
                             }
 
-                            let my_enc_key_len = u64::from_le_bytes(keys_enc[offset as usize..(offset as usize+8)].try_into().unwrap()) as usize;
-                            let my_enc_key = keys_enc[(offset as usize+8)..(offset as usize+8+my_enc_key_len)].to_vec();
-                            let s_key_bytes = my_signing_key.decrypt(my_enc_key.as_slice())?;
+                            let (my_enc_key_len_buf,keys_enc) = last_keys_enc.split_at(8);
+                            let my_enc_key_len = u64::from_le_bytes(my_enc_key_len_buf.try_into().unwrap()) as usize;
+                            if my_enc_key_len > keys_enc.len() {
+                                bail!("key buffer too long")
+                            }
+
+                            let (my_enc_key,_) = keys_enc.split_at(my_enc_key_len);
+
+                            let s_key_bytes = my_signing_key.decrypt(my_enc_key)?;
                             let mut s_key_buf = [0u8; 32];
                             s_key_buf.copy_from_slice(s_key_bytes.as_slice());
+
                             let s_key = SigningKey::from_bytes(&s_key_buf);
                             match s_key.decrypt(&data_enc) {
                                 Ok(data) => Some(data),
@@ -196,7 +225,7 @@ impl Message {
                 // add allowed node keys
                 for allowed_node_id in node_ids {
                     let s_key_enc_node =
-                        allowed_node_id.encrypt(allowed_node_id.as_bytes()).unwrap();
+                        allowed_node_id.encrypt(s_key_bytes).unwrap();
                     let s_key_enc_node_len = s_key_enc_node.len() as u64;
                     buf.extend_from_slice(&s_key_enc_node_len.to_le_bytes());
                     buf.extend(s_key_enc_node);
