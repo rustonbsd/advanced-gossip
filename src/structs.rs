@@ -1,10 +1,13 @@
 
+use std::hash::{Hash, Hasher};
+
 use anyhow::bail;
 use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::{
     ed25519::signature::SignerMut, Signature, SigningKey, SIGNATURE_LENGTH,
 };
 use ed25519_dalek_hpke::{Ed25519EciesDecryption, Ed25519EciesEncryption};
+use iroh_topic_tracker::topic_tracker::Topic;
 use serde::{Deserialize, Serialize};
 
 use crate::utils::time_now;
@@ -24,6 +27,24 @@ impl PolicyTopic {
 
     pub fn read_policy(&self) -> &ReadPolicy {
         &self.read_policy
+    }
+
+    pub fn to_topic(&self) -> Topic {
+        let mut read_state = std::collections::hash_map::DefaultHasher::new();
+        let mut write_state = std::collections::hash_map::DefaultHasher::new();
+        
+        self.read_policy.hash(&mut read_state);
+        self.write_policy.hash(&mut write_state);
+        
+        Topic::from_passphrase(
+            format!(
+                "{}-{}-{}-{}", 
+                z32::encode(self.owner.as_bytes()),
+                self.name,
+                read_state.finish(),
+                write_state.finish()
+            ).as_str()
+        )
     }
 }
 

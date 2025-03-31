@@ -31,7 +31,9 @@ postcard = { version = "1", default-features = false, features = ["alloc", "use-
 futures-lite = "2"
 z32 = "1"
 sha2 = "0.10"
-
+tracing = "0.1"
+tokio-stream = "0.1"
+futures-concurrency = "7.6.3"
 
 # Optional dependencies
 
