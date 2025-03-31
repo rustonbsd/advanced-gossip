@@ -25,6 +25,7 @@ dependencies = [
  "bytes",
  "ed25519-dalek",
  "ed25519-dalek-hpke",
+ "futures-concurrency",
  "futures-lite",
  "iroh",
  "iroh-gossip",
@@ -36,6 +37,8 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
+ "tokio-stream",
+ "tracing",
  "z32",
 ]
 
