@@ -122,6 +122,7 @@ impl Builder {
 
         let gossip = if self.gossip.is_none() {
             iroh_gossip::net::Gossip::builder()
+                .max_message_size(1024 * 1024 * 100)
                 .spawn_with_auto_discovery(endpoint.clone())
                 .await?
         } else {

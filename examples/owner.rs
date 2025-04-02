@@ -10,8 +10,8 @@ async fn main() -> anyhow::Result<()> {
 
     let gossip = AdvancedGossip::builder(&signing_key).build().await?;
 
-    let read_policy = ReadPolicy::Custom(vec![owner_signing_key.clone().verifying_key()]);
-    let write_policy = WritePolicy::All; //WritePolicy::Owner(owner_signing_key.clone().verifying_key());
+    let read_policy = ReadPolicy::All; //ReadPolicy::Custom(vec![owner_signing_key.clone().verifying_key()]);
+    let write_policy = WritePolicy::Owner(owner_signing_key.clone().verifying_key());
 
     let (topic_tx, mut topic_rx) = gossip.subscribe(PolicyTopic::new(
         read_policy.clone(),
@@ -29,7 +29,9 @@ async fn main() -> anyhow::Result<()> {
     // Main input loop for sending messages
     let mut buffer = String::new();
     let stdin = std::io::stdin();
+    let mut index = 0u8;
     loop {
+        /*
         print!("> ");
         stdin.read_line(&mut buffer).unwrap();
         let message = Message::new(&buffer.clone().replace("\n","").into(), &signing_key, &read_policy);
@@ -39,6 +41,14 @@ async fn main() -> anyhow::Result<()> {
             println!("Message not legal for this topic");
         }
         buffer.clear();
+        */
+        let v = vec![index; 1024*1024*10];
+
+        let message = Message::new(&v, &signing_key, &read_policy);
+        index += 1;
+        topic_tx.send(message).await.unwrap();
+        println!("sent message: {}", index);
+        tokio::time::sleep(std::time::Duration::from_secs(7)).await;
     }
 
     Ok(())

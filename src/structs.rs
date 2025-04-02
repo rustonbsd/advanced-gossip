@@ -81,6 +81,32 @@ pub struct Message {
 }
 
 impl Message {
+    pub fn author(&self) -> &VerifyingKey {
+        &self.author
+    }
+
+    pub fn data(&self) -> Option<&Vec<u8>> {
+        self.data.as_ref()
+    }
+
+    pub fn raw_data(&self) -> &Vec<u8> {
+        &self.raw_data
+    }
+
+    pub fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+
+    pub fn read_policy(&self) -> &ReadPolicy {
+        &self.read_policy
+    }
+
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
+}
+
+impl Message {
     pub fn from_bytes(raw_data: Vec<u8>,secret_key: Option<&SigningKey>) -> anyhow::Result<Self> {
         let (signature_buf,raw_data) = raw_data.split_at(SIGNATURE_LENGTH);
         let signature = Signature::from_bytes(&signature_buf.try_into()?);

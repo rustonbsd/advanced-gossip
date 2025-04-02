@@ -12,8 +12,8 @@ async fn main() -> anyhow::Result<()> {
 
     let gossip = AdvancedGossip::builder(&signing_key).build().await?;
 
-    let read_policy = ReadPolicy::Custom(vec![owner_signing_key.clone().verifying_key()]);
-    let write_policy = WritePolicy::All; //WritePolicy::Owner(owner_signing_key.clone().verifying_key());
+    let read_policy = ReadPolicy::All; //ReadPolicy::Custom(vec![owner_signing_key.clone().verifying_key()]);
+    let write_policy = WritePolicy::Owner(owner_signing_key.clone().verifying_key());
 
     let (topic_tx, mut topic_rx) = gossip.subscribe(PolicyTopic::new(
         read_policy.clone(),
@@ -24,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::spawn(async move {
         while let Some(message) = topic_rx.recv().await {
-            println!("Received message: {}", message);
+            println!("Received message: {:?} {}MB", message.data().unwrap()[0], message.data().unwrap().len()/1024/1024);
         }
     });
 
