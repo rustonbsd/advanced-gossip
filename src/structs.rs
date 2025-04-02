@@ -21,6 +21,15 @@ pub struct PolicyTopic {
 }
 
 impl PolicyTopic {
+    pub fn new(read_policy: ReadPolicy, write_policy: WritePolicy, owner: VerifyingKey, name: String) -> Self {
+        Self {
+            read_policy,
+            write_policy,
+            owner,
+            name,
+        }
+    }
+
     pub fn write_policy(&self) -> &WritePolicy {
         &self.write_policy
     }

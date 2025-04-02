@@ -1,40 +1,20 @@
-use iroh::Endpoint;
-use iroh_gossip::net::Gossip;
-use iroh_topic_tracker::{integrations::iroh_gossip::{AutoDiscoveryBuilder, AutoDiscoveryGossip}, topic_tracker::Topic};
-use rand_core::OsRng;
-
-
+use ed25519_dalek::SigningKey;
+use advanced_gossip::{AdvancedGossip, PolicyTopic, ReadPolicy, WritePolicy};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Generate a new secret key for secure communication
-    let mut csprng = OsRng;
-    let secret_key = iroh::SecretKey::generate(&mut csprng);
+    let owner_signing_key = SigningKey::from_bytes(z32::decode(b"ppmmixsdbmwh6i3mgxk14yfut3t1mn7rcn41mh5gmp6iy33ghefo").try_into().unwrap());
+    println!("owner_signing_key: {}", z32::encode(owner_signing_key.as_bytes()));
+    let signing_key = SigningKey::generate(&mut rand_core::OsRng);
 
-    // Set up endpoint with discovery enabled
-    let endpoint = Endpoint::builder()
-        .secret_key(secret_key)
-        .discovery_n0()
-        .bind()
-        .await?;
+    let gossip = AdvancedGossip::builder(&signing_key).build().await?;
 
-
-    // Initialize gossip with auto-discovery
-    let gossip = Gossip::builder()
-        .spawn_with_auto_discovery(endpoint.clone())
-        .await?;
-
-    // Set up protocol router
-    let _router = iroh::protocol::Router::builder(endpoint.clone())
-        .accept(iroh_gossip::ALPN, gossip.gossip.clone())
-        .spawn()
-        .await?;
-
-    // Create topic from passphrase
-    let topic = Topic::from_passphrase("my-iroh-gossip-topic");
-
-    // Split into sink (sending) and stream (receiving) 
-    let (sink, mut stream) = gossip.subscribe_and_join(topic.into()).await?.split();
+    gossip.subscribe(PolicyTopic::new(
+        ReadPolicy::All,
+        WritePolicy::Owner(signing_key.verifying_key()),
+        signing_key.verifying_key(),
+        "test topic".to_string(),
+    )).await?;
 
     Ok(())
 }
