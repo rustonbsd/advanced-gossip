@@ -1,5 +1,6 @@
 
 use std::hash::{Hash, Hasher};
+use std::fmt;
 
 use anyhow::bail;
 use ed25519_dalek::VerifyingKey;
@@ -283,6 +284,31 @@ impl Message {
             WritePolicy::Owner(node_id) => {
                 self.verify() && self.author.eq(&VerifyingKey::from_bytes(node_id.as_bytes()).unwrap())
             }
+        }
+    }
+}
+
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.data {
+            Some(data) => {
+                // Try to convert data to UTF-8 string if possible
+                match String::from_utf8(data.clone()) {
+                    Ok(text) => write!(f, "Message(author: {}, data: {}, timestamp: {})", 
+                        z32::encode(self.author.as_bytes()),
+                        text,
+                        self.timestamp
+                    ),
+                    Err(_) => write!(f, "Message(author: {}, data: <binary>, timestamp: {})",
+                        z32::encode(self.author.as_bytes()),
+                        self.timestamp
+                    )
+                }
+            },
+            None => write!(f, "Message(author: {}, data: <encrypted>, timestamp: {})",
+                z32::encode(self.author.as_bytes()),
+                self.timestamp
+            )
         }
     }
 }
