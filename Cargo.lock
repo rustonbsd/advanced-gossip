@@ -25,6 +25,7 @@ dependencies = [
  "bytes",
  "ed25519-dalek",
  "ed25519-dalek-hpke",
+ "futures",
  "futures-concurrency",
  "futures-lite",
  "iroh",

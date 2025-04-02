@@ -34,6 +34,8 @@ sha2 = "0.10"
 tracing = "0.1"
 tokio-stream = "0.1"
 futures-concurrency = "7.6.3"
+futures = "0.3"
+
 
 # Optional dependencies
 
