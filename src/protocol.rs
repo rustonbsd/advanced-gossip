@@ -52,17 +52,22 @@ impl AdvancedGossip {
     }
 
     pub async fn subscribe(&self, topic: PolicyTopic) -> anyhow::Result<(mpsc::Sender<Message>, mpsc::Receiver<Message>)> {
-        let (resp_tx, mut resp_rx) = mpsc::channel(1);
-        match self.inner.to_actor_tx.send(ToActor::Subscribe { topic: topic, resp_tx: resp_tx }).await {
+        let (resp_tx, mut resp_rx) = mpsc::channel(2);
+        let ret = match self.inner.to_actor_tx.send(ToActor::Subscribe { topic: topic, resp_tx: resp_tx.clone() }).await {
             Ok(_) => {
-                match resp_rx.recv().await {
+                println!("Res: {:?}",resp_rx.is_closed());
+                let res = resp_rx.recv().await;
+                println!("Res: {:?}",resp_rx.is_closed());
+                match res {
                     Some(Ok((from_subscriber_tx, to_subscriber_rx))) => Ok((from_subscriber_tx, to_subscriber_rx)),
                     Some(Err(err)) => Err(err),
-                    None => Err(anyhow::anyhow!("Actor closed")),
+                    None => Err(anyhow::anyhow!("Actor closed 1")),
                 }
             },
-            Err(_) => Err(anyhow::anyhow!("Actor closed")),
-        }
+            Err(_) => Err(anyhow::anyhow!("Actor closed 2")),
+        };
+        drop(resp_rx);
+        ret
     }
 }
 
@@ -237,7 +242,9 @@ impl Actor {
                     match msg {
                         ToActor::Subscribe { topic, resp_tx } => {
 
+                            println!("Subbed");
                             if self.topics.contains_key(&topic) {
+                                println!("Topic already subbed");
                                 let _ = resp_tx.send(Err(anyhow::anyhow!("Topic already subscribed")));
                                 continue;
                             }
@@ -263,6 +270,7 @@ impl Actor {
                             self.subscriber_futures.push(Self::future_box_subscriber(topic.clone(), from_subscriber_rx));
 
                             let _ = resp_tx.send(Ok((from_subscriber_tx, to_subscriber_rx)));
+                            println!("Send ok");
                         },
                         ToActor::Leave { topic } => {
                             let _ = self.topics.remove(&topic);
