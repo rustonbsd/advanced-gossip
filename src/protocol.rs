@@ -52,12 +52,13 @@ impl AdvancedGossip {
     }
 
     pub async fn subscribe(&self, topic: PolicyTopic) -> anyhow::Result<(mpsc::Sender<Message>, mpsc::Receiver<Message>)> {
-        let (resp_tx, mut resp_rx) = mpsc::channel(2);
-        let ret = match self.inner.to_actor_tx.send(ToActor::Subscribe { topic: topic, resp_tx: resp_tx.clone() }).await {
+        let (resp_tx, mut resp_rx) = mpsc::channel(1);
+        let ret = match self.inner.to_actor_tx.send(ToActor::Subscribe { topic: topic, resp_tx: resp_tx }).await {
             Ok(_) => {
-                println!("Res: {:?}",resp_rx.is_closed());
+                println!("rx_open: {:?}",resp_rx.is_closed());
                 let res = resp_rx.recv().await;
-                println!("Res: {:?}",resp_rx.is_closed());
+                println!("rx_open: {:?}",resp_rx.is_closed());
+
                 match res {
                     Some(Ok((from_subscriber_tx, to_subscriber_rx))) => Ok((from_subscriber_tx, to_subscriber_rx)),
                     Some(Err(err)) => Err(err),
@@ -66,7 +67,6 @@ impl AdvancedGossip {
             },
             Err(_) => Err(anyhow::anyhow!("Actor closed 2")),
         };
-        drop(resp_rx);
         ret
     }
 }
@@ -269,8 +269,8 @@ impl Actor {
                             let _topic = topic.clone();
                             self.subscriber_futures.push(Self::future_box_subscriber(topic.clone(), from_subscriber_rx));
 
-                            let _ = resp_tx.send(Ok((from_subscriber_tx, to_subscriber_rx)));
-                            println!("Send ok");
+                            let res = resp_tx.send(Ok((from_subscriber_tx, to_subscriber_rx))).await;
+                            println!("Send ok: {res:?}");
                         },
                         ToActor::Leave { topic } => {
                             let _ = self.topics.remove(&topic);
@@ -314,9 +314,10 @@ impl Actor {
                                 if message.is_legal(&topic_state.write_policy) {
                                     self.to_actor_tx.send(ToActor::ReceivedMessage { message, topic: topic.clone() }).await?;
                                 }
+                                self.gossip_futures.push(Self::future_box_gossip(topic, gossip_rx));
                             }
                         }
-
+                    } else if maybe_event.is_some() {
                         self.gossip_futures.push(Self::future_box_gossip(topic, gossip_rx));
                     }
                 }
