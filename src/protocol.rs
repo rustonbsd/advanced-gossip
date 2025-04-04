@@ -9,7 +9,7 @@ use iroh_gossip::net::{Event, GossipEvent, GossipReceiver, GossipSender, GossipT
 use iroh_topic_tracker::integrations::iroh_gossip::{
     AutoDiscoveryBuilder, AutoDiscoveryGossip, GossipAutoDiscovery,
 };
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use tokio::{
     sync::{mpsc, Mutex},
     task::AbortHandle,
@@ -38,6 +38,10 @@ enum ToActor {
         message: Message,
         topic: PolicyTopic,
     },
+    TopicTrackerUpdate {
+        next_update_in: Duration,
+        topic: PolicyTopic,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -61,7 +65,9 @@ impl AdvancedGossip {
 
                 match res {
                     Some(Ok((from_subscriber_tx, to_subscriber_rx))) => Ok((from_subscriber_tx, to_subscriber_rx)),
-                    Some(Err(err)) => Err(err),
+                    Some(Err(err)) => { 
+                        println!("Error: {:?}",err);
+                        Err(err)},
                     None => Err(anyhow::anyhow!("Actor closed 1")),
                 }
             },
@@ -121,8 +127,13 @@ impl Builder {
         };
 
         let gossip = if self.gossip.is_none() {
+            let mut hyparview_config = iroh_gossip::proto::HyparviewConfig::default();
+            hyparview_config.passive_view_capacity = 100;
+            hyparview_config.active_view_capacity = 10;
+            hyparview_config.shuffle_interval = Duration::from_secs(8);
             iroh_gossip::net::Gossip::builder()
                 .max_message_size(1024 * 1024 * 100)
+                .membership_config(hyparview_config)
                 .spawn_with_auto_discovery(endpoint.clone())
                 .await?
         } else {
@@ -292,6 +303,9 @@ impl Actor {
                                 }
                             }
 
+                        },
+                        ToActor::TopicTrackerUpdate { next_update_in, topic } => {
+                            println!("TopicTrackerUpdate: {next_update_in:?} {topic:?}");
                         }
                     }
                 },
