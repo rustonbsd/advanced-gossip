@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use ed25519_dalek::SigningKey;
 use advanced_gossip::{AdvancedGossip, Message, PolicyTopic, ReadPolicy, WritePolicy};
 
@@ -24,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::spawn(async move {
         while let Some(message) = topic_rx.recv().await {
-            println!("Received message: {:?} {}MB", message.data().unwrap()[0], message.data().unwrap().len()/1024/1024);
+            println!("Received message: {:?} {} {}MB", message.data().unwrap()[0],z32::encode(signing_key.as_bytes()), message.data().unwrap().len()/1024/1024);
         }
     });
 
@@ -32,6 +34,9 @@ async fn main() -> anyhow::Result<()> {
     let mut buffer = String::new();
     let stdin = std::io::stdin();
     loop {
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        continue;
+
         print!("> ");
         stdin.read_line(&mut buffer).unwrap();
         let message = Message::new(&buffer.clone().replace("\n","").into(), &signing_key, &read_policy);
